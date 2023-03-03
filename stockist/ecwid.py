@@ -5,7 +5,7 @@ import tjawn
 from typing import Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, config, Undefined
-from dacite import from_dict
+from dacite import from_dict, Config
 
 import json
 import requests
@@ -34,7 +34,7 @@ class Results:
 @dataclass_json(undefined=Undefined.EXCLUDE)
 @dataclass
 class Product:
-    id: str
+    id: int
     sku: str
     name: Optional[str] = None
     price: Optional[float] = None
@@ -83,9 +83,21 @@ class Client:
 
         return products
 
+    def update_qty(self, product, quantity):
+        t = logberry.task("Update quantity", sku=product.sku, qty=quantity)
+        res = requests.put(f"https://app.ecwid.com/api/v3/{self.store}/products/{product.id}/inventory",
+                       json = {
+                           'quantityDelta': quantity,
+                           },
+                       headers = {
+                           'Authorization': f"Bearer {self.token}",
+                           'Accept': 'application/json',
+                       })
+        res.raise_for_status()
+        t.success()
 
 def client(settings: Settings):
     return Client(settings)
 
 def as_products(products):
-    return [Product.from_dict(p) for p in products]
+    return [from_dict(data_class=Product, data=p, config=Config(type_hooks={int: int})) for p in products]
