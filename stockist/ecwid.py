@@ -30,6 +30,11 @@ class Results:
     def __str__(self):
         return f"Results {{total {self.total}, offset {self.offset}, count {self.count}, limit {self.limit}}}"
 
+def dict_remap(d, fields):
+    for k in fields:
+        if k[0] in d:
+            d[k[1]] = d.pop(k[0])
+    return d
 
 @dataclass_json(undefined=Undefined.EXCLUDE)
 @dataclass
@@ -38,8 +43,15 @@ class Product:
     sku: str
     name: Optional[str] = None
     price: Optional[float] = None
-    msrp: Optional[float] = field(metadata=config(field_name="compareToPrice"), default=None)
-    cost: Optional[float] = field(metadata=config(field_name="costPrice"), default=None)
+    msrp: Optional[float] = None
+    cost: Optional[float] = None
+
+    @staticmethod
+    def _remap(d):
+        return dict_remap(d, [
+            ('compareToPrice', 'msrp'),
+            ('costPrice', 'cost')
+            ])
 
     def __str__(self):
         s = f"[{self.sku}]"
@@ -100,4 +112,4 @@ def client(settings: Settings):
     return Client(settings)
 
 def as_products(products):
-    return [from_dict(data_class=Product, data=p, config=Config(type_hooks={int: int})) for p in products]
+    return [from_dict(data_class=Product, data=Product._remap(p), config=Config(type_hooks={int: int})) for p in products]
