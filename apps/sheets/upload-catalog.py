@@ -10,7 +10,7 @@ import tjawn
 
 logberry.start()
 
-input = 'ecwid_catalog.jawn'
+input = 'data/ecwid_catalog.jawn'
 
 t = logberry.task("Read catalog", file=input)
 products = ecwid.as_products(tjawn.loads(open(input, "rt").read()))

@@ -21,7 +21,7 @@ invoice = sys.argv[1]
 api = sheets.API(sheets.load_configuration())
 items = api.download_invoice(invoice)
 
-fn = f"{invoice.replace(' ', '-')}.jawn"
+fn = f"data/{invoice.replace(' ', '-')}.jawn"
 t = logberry.task("Writing invoice to file", file=fn)
 with open(fn, "wt") as f:
     f.write(tjawn.dumps(items))

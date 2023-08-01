@@ -21,9 +21,9 @@ if len(sys.argv) < 2:
 fn = sys.argv[1]
 
 if not path.exists(fn):
-    fn = f"{fn.replace(' ', '-')}.jawn"
+    fn = f"data/{fn.replace(' ', '-')}.jawn"
     if not path.exists(fn):
-        print("Cannot find invoice for '{sys.argv[1]}'")
+        print(f"Cannot find invoice for '{sys.argv[1]}'")
         exit(-1)
 
 
@@ -31,8 +31,8 @@ t = logberry.task("Reading invoice", file=fn)
 items = sheets.as_invoiceitems(tjawn.loads(open(fn, "rt").read()))
 t.success()
 
-t = logberry.task("Read catalog", file='ecwid_catalog.jawn')
-catalog = ecwid.as_products(tjawn.loads(open('ecwid_catalog.jawn', "rt").read()))
+t = logberry.task("Read catalog", file='data/ecwid_catalog.jawn')
+catalog = ecwid.as_products(tjawn.loads(open('data/ecwid_catalog.jawn', "rt").read()))
 t.success()
 
 catalog = { p.sku: p for p in catalog}
