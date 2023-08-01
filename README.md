@@ -75,6 +75,8 @@ python -m apps.sheets.update-stock <invoice filename or sheet label>
 ### HobbyTyme
 
 ```
+python -m apps.hobbytyme.pdf /tmp/mozilla_joe0/01019940.pdf
+
 python -m apps.sheets.download-invoice 'HobbyTyme 20230517'
 
 python -m apps.sheets.update-stock 'HobbyTyme 20230517'
