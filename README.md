@@ -2,7 +2,8 @@
 
 ## Usage
 
-## Ecwid
+
+### Ecwid
 
 Settings in `.conf/ecwid.jawn`:
 ```
@@ -39,6 +40,10 @@ Delete catalog
 python -m apps.square.delete-catalog
 ```
 
+Create manual import sheet
+```
+python -m apps.square.gen-import
+```
 
 ### Google Sheets
 
@@ -66,14 +71,24 @@ Update stock
 python -m apps.sheets.update-stock <invoice filename or sheet label>
 ```
 
+
+### HobbyTyme
+
+```
+python -m apps.sheets.download-invoice 'HobbyTyme 20230517'
+
+python -m apps.sheets.update-stock 'HobbyTyme 20230517'
+```
+
 ## Development
 
 ### Dependencies
 
 * squareup
-* tjawn
-* logberry
 * dacite
 * dataclasses_json
 * requests
 * gspread
+
+* tjawn
+* logberry
