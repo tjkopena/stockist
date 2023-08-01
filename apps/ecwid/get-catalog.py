@@ -13,11 +13,11 @@ import tjawn
 
 logberry.start()
 
-output = 'ecwid_catalog.jawn'
+output = 'data/ecwid_catalog.jawn'
 
 if path.exists(output):
     t = logberry.task("Archiving prior export")
-    newout = "ecwid_catalog-" + datetime.fromtimestamp(path.getmtime(output)).strftime("%Y%m%d") + ".jawn"
+    newout = "data/ecwid_catalog-" + datetime.fromtimestamp(path.getmtime(output)).strftime("%Y%m%d") + ".jawn"
     os.rename(output, newout)
     t.success(archive=newout)
 

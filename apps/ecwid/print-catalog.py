@@ -9,10 +9,15 @@ import tjawn
 
 logberry.start()
 
-input = 'ecwid_catalog.jawn'
+fn_categories = 'data/ecwid_categories.jawn'
+fn_catalog = 'data/ecwid_catalog.jawn'
 
-t = logberry.task("Read catalog", file=input)
-products = ecwid.as_products(tjawn.loads(open(input, "rt").read()))
+t = logberry.task("Read categories", file=fn_categories)
+categories = { c.id: c for c in ecwid.as_categories(tjawn.loads(open(fn_categories, "rt").read())) }
+t.success()
+
+t = logberry.task("Read catalog", file=fn_catalog)
+products = ecwid.as_products(tjawn.loads(open(fn_catalog, "rt").read()))
 t.success()
 
 logberry.stop()
@@ -24,4 +29,8 @@ logberry.stop()
 
 print()
 for p in products:
-    print(f"{str(p.sku):<16} {str(p.name):<32} {str(p.price):<8} {str(p.msrp):<8} {str(p.cost):<8}")
+    defcat = categories.get(p.defaultCategory, None)
+    if defcat:
+        defcat = defcat.name
+
+    print(f"{str(p.sku):<16} {str(p.name):<40} {str(p.quantity):<3} ${str(p.price):<8} ${str(p.msrp):<8} ${str(p.cost):<8} {defcat}")
