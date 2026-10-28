@@ -19,7 +19,7 @@ if path.exists(output):
     t = logberry.task("Archiving prior export")
     newout = "data/ecwid_catalog-" + datetime.fromtimestamp(path.getmtime(output)).strftime("%Y%m%d") + ".jawn"
     os.rename(output, newout)
-    t.success(archive=newout)
+    t.end_success(archive=newout)
 
 api = ecwid.client(ecwid.load_configuration())
 products = api.get_catalog()
@@ -27,6 +27,6 @@ products = api.get_catalog()
 t = logberry.task("Write catalog", file=output)
 with open(output, "wt") as f:
     f.write(tjawn.dumps(products))
-t.success()
+t.end_success()
 
 logberry.stop()

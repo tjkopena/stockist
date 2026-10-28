@@ -35,11 +35,11 @@ class Client:
 
             tt = t.task("Deleting batch")
             self.client.catalog.batch_delete_catalog_objects({'object_ids': batch})
-            tt.success(n=len(batch))
+            tt.end_success(n=len(batch))
 
             objects = objects[len(batch):]
 
-        t.success()
+        t.end_success()
 
     def get_catalog(self):
         t = logberry.task("Retrieving catalog")
@@ -54,7 +54,7 @@ class Client:
             if not res.cursor:
                 break
 
-        t.success(items=len(objects))
+        t.end_success(items=len(objects))
 
         return objects
 

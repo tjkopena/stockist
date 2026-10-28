@@ -25,6 +25,6 @@ fn = f"data/{invoice.replace(' ', '-')}.jawn"
 t = logberry.task("Writing invoice to file", file=fn)
 with open(fn, "wt") as f:
     f.write(tjawn.dumps(items))
-t.success()
+t.end_success()
 
 logberry.stop()

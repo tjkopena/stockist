@@ -37,7 +37,7 @@ class API:
                                 authorized_user_filename=settings.authorization)
 
         self.workbook = self.gc.open_by_key(settings.workbook_id)
-        t.success()
+        t.end_success()
 
     @property
     def catalog_sheet(self):
@@ -55,13 +55,13 @@ class API:
         self.catalog_sheet.clear()
         self.catalog_sheet.update('A1', catalog)
 
-        t.success()
+        t.end_success()
 
     def download_invoice(self, invoice):
         t = logberry.task("Retrieving invoice", invoice=invoice)
         sheet = self.workbook.worksheet(invoice)
         items = [InvoiceItem(i[0], int(i[1]), float(i[2].removeprefix('$')), i[3]) for i in sheet.get("B4:E")]
-        t.success()
+        t.end_success()
 
         return items
 

@@ -70,7 +70,7 @@ def extract(fn: str):
             lineitems.append(LineItem(qty, sku, name, price_retail, price_wholesale, mfg))
             items += qty
 
-    t.success(lineitems=len(lineitems), items=items)
+    t.end_success(lineitems=len(lineitems), items=items)
     return lineitems
 
 def write_csv(fn: str, items: list[LineItem]):
@@ -82,13 +82,13 @@ def write_csv(fn: str, items: list[LineItem]):
 
             #print(f'{item.qty};"{item.mfg}";"{item.sku}";"";"{item.name}";{item.price_retail};{item.price_wholesale}')
 
-    t.success()
+    t.end_success()
 try:
 
     items = extract(fn)
     write_csv(fn, items)
 
 except Exception as e:
-    logberry.exception(e)
+    logberry.end_exception(e)
 
 logberry.stop()

@@ -82,6 +82,8 @@ class Product:
 
         s += f" (${self.price if self.price else '--'} : ${self.msrp if self.msrp else '--'} : ${self.cost if self.cost else '--'})"
 
+        s += f"  {self.quantity}ct"
+
         return s
 
 
@@ -106,7 +108,7 @@ class Client:
                                    'Accept': 'application/json',
                                })
             res.raise_for_status()
-            tt.success()
+            tt.end_success()
 
             results = Results(**res.json())
 
@@ -114,7 +116,7 @@ class Client:
             total = results.total
             products.extend(results.items)
 
-        t.success(items=len(products))
+        t.end_success(items=len(products))
 
         return products
 
@@ -134,7 +136,7 @@ class Client:
                                    'Accept': 'application/json',
                                })
             res.raise_for_status()
-            tt.success()
+            tt.end_success()
 
             results = Results(**res.json())
 
@@ -142,7 +144,7 @@ class Client:
             total = results.total
             categories.extend(results.items)
 
-        t.success(categories=len(categories))
+        t.end_success(categories=len(categories))
 
         return categories
 
@@ -157,7 +159,8 @@ class Client:
                            'Accept': 'application/json',
                        })
         res.raise_for_status()
-        t.success()
+        t.info(res.text)
+        t.end_success()
 
     def update_unlimited(self, product, value=False):
         t = logberry.task("Update unlimited", sku=product.sku, value=value)
@@ -170,7 +173,7 @@ class Client:
                            'Accept': 'application/json',
                        })
         res.raise_for_status()
-        t.success()
+        t.end_success()
 
 def client(settings: Settings):
     return Client(settings)

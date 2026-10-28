@@ -14,11 +14,11 @@ fn_catalog = 'data/ecwid_catalog.jawn'
 
 t = logberry.task("Read categories", file=fn_categories)
 categories = { c.id: c for c in ecwid.as_categories(tjawn.loads(open(fn_categories, "rt").read())) }
-t.success()
+t.end_success()
 
 t = logberry.task("Read catalog", file=fn_catalog)
 products = ecwid.as_products(tjawn.loads(open(fn_catalog, "rt").read()))
-t.success()
+t.end_success()
 
 logberry.stop()
 

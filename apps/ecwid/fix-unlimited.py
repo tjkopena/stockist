@@ -16,7 +16,7 @@ logberry.start()
 
 t = logberry.task("Read catalog", file='data/ecwid_catalog.jawn')
 catalog = ecwid.as_products(tjawn.loads(open('data/ecwid_catalog.jawn', "rt").read()))
-t.success()
+t.end_success()
 
 api = ecwid.client(ecwid.load_configuration())
 for p in catalog:

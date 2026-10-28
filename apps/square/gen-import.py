@@ -15,11 +15,11 @@ fn_catalog = 'data/ecwid_catalog.jawn'
 
 t = logberry.task("Read categories", file=fn_categories)
 categories = { c.id: c for c in ecwid.as_categories(tjawn.loads(open(fn_categories, "rt").read())) }
-t.success()
+t.end_success()
 
 t = logberry.task("Read catalog", file=fn_catalog)
 products = ecwid.as_products(tjawn.loads(open(fn_catalog, "rt").read()))
-t.success()
+t.end_success()
 
 
 #catalog = [['sku', 'name', 'price', 'msrp', 'cost']]
@@ -44,7 +44,7 @@ with open(fn, "wt") as f:
 
         name = p.name.replace('"', '\'')
         f.write(f'"{name}","","{str(p.sku)}","","{category}",visible,{p.price},{p.quantity},Y\n')
-t.success(items=len(products))
+t.end_success(items=len(products))
 
                 ## Token
 # Item Name
