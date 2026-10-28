@@ -1,0 +1,10 @@
+# Local editable installs, see README:
+#   pip install -e /home/joe/code/logberrypy/
+#   pip install -e /home/joe/code/tjawn/src/py
+dacite
+dataclasses-json
+google-auth-oauthlib
+gspread
+openpyxl
+PyPDF2
+requests
