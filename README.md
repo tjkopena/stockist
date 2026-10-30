@@ -15,7 +15,6 @@ gspread
 
 square?
 
-
 ### Ecwid
 
 Settings in `.conf/ecwid.jawn`:
@@ -36,7 +35,6 @@ Print catalog
 ```
 python -m apps.ecwid.print-catalog
 ```
-
 
 ### Square
 
@@ -87,7 +85,6 @@ Update stock
 python -m apps.sheets.update-stock <invoice filename or sheet label>
 ```
 
-
 ### HobbyTyme
 
 ```
@@ -112,18 +109,15 @@ Settings in `.conf/brickowl.jawn`:
 api_key: <API key>
 ```
 
-Summarize purchase orders into a workbook, default `data/YYYYMMDD.xlsx`;
-raw downloads are saved to `data/brickowl-orders-YYYYMMDD.jawn`
+Download purchase orders into the local cache, one `<order ID>.jawn`
+file each in `data/brickowl/orders/` (`--out` to change); all orders
+if no `--orders`, `--from`, or `--in` scope is given
 ```
-python -m apps.brickowl.orders
-python -m apps.brickowl.orders --start 2026-10-01 --end 20261026
-python -m apps.brickowl.orders --orders 4657373,8853584 \
-       --output data/bricks.xlsx
+python -m apps.brickowl.get-orders
+python -m apps.brickowl.get-orders --in 2026-10-01::2026-10-26
+python -m apps.brickowl.get-orders --from 4657373 --orders 8853584
 ```
 
-Non-USD orders are converted at the rate actually paid if paid in USD,
-otherwise at the ECB reference rate (frankfurter.dev) for the order
-date.
 
 ## Development
 

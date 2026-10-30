@@ -23,6 +23,23 @@ STATUS_CANCELLED: Final[str] = '8'
 UNKNOWN_ITEM: Final[str] = '(unknown item)'
 
 
+DATE_FORMATS: Final[tuple] = ('%Y%m%d', '%Y-%m-%d', '%Y/%m/%d')
+
+
+class APIError(Exception):
+    pass
+
+
+def parse_date(s):
+    """Local midnight of a YYYYMMDD, YYYY-MM-DD, or YYYY/MM/DD date."""
+    for fmt in DATE_FORMATS:
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            pass
+    raise ValueError(f"Invalid date '{s}', must be YYYYMMDD, YYYY-MM-DD, or YYYY/MM/DD")
+
+
 @dataclass
 class Settings:
     api_key: str
@@ -43,7 +60,13 @@ class Client:
                                'User-Agent': USER_AGENT,
                                'Accept': 'application/json',
                            })
-        res.raise_for_status()
+        if not res.ok:
+            try:
+                msg = res.json()['error']
+            except Exception:
+                msg = res.reason
+            t.end_failure(msg, status=res.status_code)
+            raise APIError(f"{endpoint}: {res.status_code} {msg}")
         t.end_success()
         return res.json()
 
