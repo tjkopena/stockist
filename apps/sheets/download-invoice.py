@@ -23,8 +23,7 @@ items = api.download_invoice(invoice)
 
 fn = f"data/{invoice.replace(' ', '-')}.jawn"
 t = logberry.task("Writing invoice to file", file=fn)
-with open(fn, "wt") as f:
-    f.write(tjawn.dumps(items))
+tjawn.dumpf_list(items, fn)
 t.end_success()
 
 logberry.stop()

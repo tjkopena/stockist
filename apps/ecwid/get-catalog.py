@@ -25,8 +25,7 @@ api = ecwid.client(ecwid.load_configuration())
 products = api.get_catalog()
 
 t = logberry.task("Write catalog", file=output)
-with open(output, "wt") as f:
-    f.write(tjawn.dumps(products))
+tjawn.dumpf_list(products, output)
 t.end_success()
 
 logberry.stop()

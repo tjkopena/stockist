@@ -3,7 +3,7 @@ import logberry
 import tjawn
 
 from dataclasses import dataclass
-from dacite import from_dict, Config
+from dacite import from_dict
 
 import gspread
 
@@ -25,7 +25,7 @@ class InvoiceItem:
         return f"{self.sku:<9} {self.quantity:>2} {self.name}"
 
 def load_configuration(fn='.conf/sheets.jawn'):
-    return from_dict(data_class=Settings, data=tjawn.loads(open(fn, 'rt').read()))
+    return from_dict(data_class=Settings, data=tjawn.loadf(fn))
 
 class API:
     def __init__(self, settings: Settings):
@@ -66,4 +66,4 @@ class API:
         return items
 
 def as_invoiceitems(items):
-    return [from_dict(data_class=InvoiceItem, data=i, config=Config(type_hooks={int: int})) for i in items]
+    return [from_dict(data_class=InvoiceItem, data=i) for i in items]

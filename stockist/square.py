@@ -12,7 +12,7 @@ class Settings:
     environment: str
 
 def load_configuration(fn='.conf/square.jawn'):
-    return from_dict(data_class=Settings, data=tjawn.loads(open(fn, "rt").read()))
+    return from_dict(data_class=Settings, data=tjawn.loadf(fn))
 
 @dataclass
 class Item:

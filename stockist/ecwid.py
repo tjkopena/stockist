@@ -5,7 +5,7 @@ import tjawn
 from typing import Optional, Final
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, config, Undefined
-from dacite import from_dict, Config
+from dacite import from_dict
 
 import json
 import requests
@@ -22,7 +22,7 @@ class Settings:
     token: str
 
 def load_configuration(fn='.conf/ecwid.jawn'):
-    return from_dict(data_class=Settings, data=tjawn.loads(open(fn, "rt").read()))
+    return from_dict(data_class=Settings, data=tjawn.loadf(fn))
 
 
 @dataclass
@@ -179,13 +179,9 @@ def client(settings: Settings):
     return Client(settings)
 
 def as_categories(categories):
-    return [from_dict(data_class=Category,
-                      data=Category._remap(c),
-                      config=Config(type_hooks={int: int}))
+    return [from_dict(data_class=Category, data=Category._remap(c))
             for c in categories]
 
 def as_products(products):
-    return [from_dict(data_class=Product,
-                      data=Product._remap(p),
-                      config=Config(type_hooks={int: int}))
+    return [from_dict(data_class=Product, data=Product._remap(p))
             for p in products]

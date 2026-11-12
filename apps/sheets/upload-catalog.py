@@ -13,7 +13,7 @@ logberry.start()
 input = 'data/ecwid_catalog.jawn'
 
 t = logberry.task("Read catalog", file=input)
-products = ecwid.as_products(tjawn.loads(open(input, "rt").read()))
+products = ecwid.as_products(tjawn.loadf_list(input))
 t.end_success()
 
 api = sheets.API(sheets.load_configuration())

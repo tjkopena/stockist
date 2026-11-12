@@ -21,11 +21,11 @@ fn_b = sys.argv[2]
 fn_catalog = 'data/ecwid_catalog.jawn'
 
 t = logberry.task("Read catalog a", file=fn_a)
-prod_a = ecwid.as_products(tjawn.loads(open(fn_a, "rt").read()))
+prod_a = ecwid.as_products(tjawn.loadf_list(fn_a))
 t.end_success()
 
 t = logberry.task("Read catalog b", file=fn_b)
-prod_b = ecwid.as_products(tjawn.loads(open(fn_b, "rt").read()))
+prod_b = ecwid.as_products(tjawn.loadf_list(fn_b))
 t.end_success()
 
 

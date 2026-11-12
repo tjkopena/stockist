@@ -25,8 +25,7 @@ api = ecwid.client(ecwid.load_configuration())
 categories = api.get_categories()
 
 t = logberry.task("Write categories", file=output)
-with open(output, "wt") as f:
-    f.write(tjawn.dumps(categories))
+tjawn.dumpf_list(categories, output)
 t.end_success()
 
 logberry.stop()

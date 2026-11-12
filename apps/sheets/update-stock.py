@@ -28,11 +28,11 @@ if not path.exists(fn):
 
 
 t = logberry.task("Reading invoice", file=fn)
-items = sheets.as_invoiceitems(tjawn.loads(open(fn, "rt").read()))
+items = sheets.as_invoiceitems(tjawn.loadf_list(fn))
 t.end_success()
 
 t = logberry.task("Read catalog", file='data/ecwid_catalog.jawn')
-catalog = ecwid.as_products(tjawn.loads(open('data/ecwid_catalog.jawn', "rt").read()))
+catalog = ecwid.as_products(tjawn.loadf_list('data/ecwid_catalog.jawn'))
 t.end_success()
 
 catalog = { p.sku: p for p in catalog}

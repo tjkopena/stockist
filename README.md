@@ -4,14 +4,12 @@
 logberry
 pip install -e /home/joe/code/logberrypy/
 
-tjawn
-pip install -e /home/joe/code/tjawn/src/py
-
 dataclasses_json
 dacite
 requests
 pypdf2
 gspread
+tjawn>=2.0
 
 square?
 
@@ -110,12 +108,39 @@ api_key: <API key>
 ```
 
 Download purchase orders into the local cache, one `<order ID>.jawn`
-file each in `data/brickowl/orders/` (`--out` to change); all orders
-if no `--orders`, `--from`, or `--in` scope is given
+file each in `data/brickowl/orders/` (`--cache` or `cache:` in
+`.conf/brickowl.jawn` to change); all orders if no `--orders`,
+`--from`, or `--in` scope is given
 ```
 python -m apps.brickowl.get-orders
 python -m apps.brickowl.get-orders --in 2026-10-01::2026-10-26
 python -m apps.brickowl.get-orders --from 4657373 --orders 8853584
+```
+
+List cached orders in scope; `--csv` for CSV, `--sort` to order by
+`id`, `time`, `date`, `store`, `status`, or `total`, each optionally
+`:asc` or `:desc` (default `time,id`, newest first)
+```
+python -m apps.brickowl.list-orders
+python -m apps.brickowl.list-orders --status shipped+ --sort store,total
+python -m apps.brickowl.list-orders --in 2026-01-01:: --csv
+```
+
+Summarize cached orders in scope into an XLSX workbook, a summary sheet
+of all items purchased then a sheet per order; written to
+`data/brickowl/orders.xlsx` unless `--out` (or `out:` in
+`.conf/brickowl.jawn`) is given
+```
+python -m apps.brickowl.summarize-orders
+python -m apps.brickowl.summarize-orders --in 2026-10-01:: --out data/october.xlsx
+```
+
+Scope directives may also be set in `.conf/brickowl.jawn`, each a
+string or list of strings as on the command line; they are ignored if
+any scope directive is given on the command line
+```
+status: "Shipped+"
+in: ["2025-01-01::2025-06-30", "2026-01-01::"]
 ```
 
 
@@ -129,8 +154,9 @@ python -m apps.brickowl.get-orders --from 4657373 --orders 8853584
 * requests
 * gspread
 
-* tjawn
+* tjawn (>= 2.0)
 * logberry
+* wcwidth
 
 
 
