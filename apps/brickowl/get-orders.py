@@ -7,6 +7,7 @@ import os
 import signal
 import sys
 import tempfile
+import time
 
 from apps.brickowl import common
 from stockist import brickowl
@@ -18,11 +19,20 @@ import tjawn
 TEMP_PREFIX = '.get-orders-'
 TEMP_SUFFIX = '.tmp'
 
+CACHE_LOG = '.get-orders.jawn'
+# Allowance for clock differences when asking Brick Owl for updated orders.
+UPDATE_MARGIN = 3600
+
 
 parser = argparse.ArgumentParser(prog='python -m apps.brickowl.get-orders',
                                  description='Download Brick Owl purchase orders into a local cache folder')
 common.add_config_arguments(parser)
 common.add_scope_arguments(parser, implicit_status=False)
+parser.add_argument('--force', action='store_true',
+                    help='Download all orders in scope, even those cached and current')
+parser.add_argument('--cache-log', dest='cache_log', metavar='FILE',
+                    help=f'File recording when cached orders were last confirmed current '
+                         f'(default from configuration file, else {CACHE_LOG} in the cache folder)')
 args = parser.parse_args()
 
 
@@ -39,7 +49,7 @@ signal.signal(signal.SIGTERM, on_sigterm)
 logberry.start()
 
 try:
-    settings = common.load_settings(args)
+    settings = common.load_settings(args, options=('cache_log',))
 except Exception as e:
     abort("Could not load configuration", error=str(e))
 
@@ -49,6 +59,62 @@ if not settings.api_key:
 cache = settings.cache
 if path.exists(cache) and not path.isdir(cache):
     abort("Cache folder exists as a file", cache=cache)
+
+cache_log = args.cache_log or path.join(cache, CACHE_LOG)
+if path.exists(cache_log) and not path.isfile(cache_log):
+    abort("Cache log exists and is not a file", cache_log=cache_log)
+
+
+#-- Cache Log -------------------------------------------------------------
+
+def read_log(fn):
+    """Cache log entries as given and as Unix timestamps, by order ID;
+    ValueError if unreadable or corrupted."""
+    if not path.exists(fn):
+        return {}, {}
+    try:
+        data = tjawn.loadf(fn)
+    except OSError as e:
+        raise ValueError(f"cannot be read: {e.strerror or e}")
+    except Exception as e:
+        raise ValueError(f"cannot be parsed: {e}")
+    if data is None:
+        return {}, {}
+    if not isinstance(data, dict):
+        raise ValueError("corrupted, not a map")
+
+    times = {}
+    for oid, v in data.items():
+        try:
+            if not isinstance(oid, str) or brickowl.canonical_id(oid) != oid:
+                raise ValueError(f"invalid order ID '{oid}'")
+            times[oid] = brickowl.parse_utc_iso(v)
+        except ValueError as e:
+            raise ValueError(f"corrupted, {e}")
+    return data, times
+
+def write_log(fn, entries):
+    folder = path.dirname(path.abspath(fn))
+    os.makedirs(folder, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=folder, prefix=TEMP_PREFIX, suffix=TEMP_SUFFIX)
+    os.close(fd)
+    try:
+        tjawn.dumpf(entries, tmp)
+        os.replace(tmp, fn)
+    finally:
+        if path.exists(tmp):
+            os.remove(tmp)
+
+def cached_view(oid):
+    """View of an order's valid cache file, None if there is none."""
+    try:
+        return common.read_order(oid, path.join(cache, f"order-{oid}.jawn"))['view']
+    except common.OrderError:
+        return None
+
+def same_update(live, cached):
+    a, b = live.get('updated_time'), cached.get('updated_time')
+    return not common.empty(a) and not common.empty(b) and str(a).strip() == str(b).strip()
 
 
 #-- Scope -----------------------------------------------------------------
@@ -119,9 +185,20 @@ def listed_id(o):
     except ValueError:
         abort("Order listed with invalid ID", order_id=str(o.get('order_id')))
 
+log, log_times = {}, {}
+if not args.force:
+    try:
+        log, log_times = read_log(cache_log)
+    except ValueError as e:
+        abort("Could not read cache log", cache_log=cache_log, error=str(e))
+
+# Orders in scope whose cached copies are current.
+current = set()
+
 try:
     api = brickowl.client(settings)
 
+    run_start = int(time.time())
     from_ts = [from_time(oid) for oid in args.from_ids]
     scope = common.Scope(args, from_ts, implicit_status=False)
 
@@ -132,6 +209,17 @@ try:
         order_ids = list(dict.fromkeys(listed_id(o)
                                        for o in api.list_orders(order_time=scope.list_lower())
                                        if listed_ok(o)))
+
+    if not args.force:
+        known = {oid: view for oid in order_ids
+                 if oid in log_times and (view := cached_view(oid)) is not None}
+        if scope.ids is not None:
+            current = {oid for oid, view in known.items() if same_update(retrieved[oid], view)}
+        elif known:
+            since = max(0, int(min(log_times[oid] for oid in known)) - UPDATE_MARGIN)
+            updated = {listed_id(o) for o in api.list_orders(order_time=scope.list_lower(),
+                                                             update_time=since)}
+            current = set(known) - updated
 
 except Exception as e:
     abort("Could not establish order scope", error=str(e))
@@ -174,9 +262,12 @@ skipped = 0
 # Orders not written, and orders written despite Natural ID lookup faults.
 flagged = []
 faulted = []
+# Orders written without faults, and those written with them.
+confirmed = set()
+relookup = set()
 
 try:
-    for oid in order_ids:
+    for oid in (oid for oid in order_ids if oid not in current):
         try:
             view = view_order(oid)
         except Exception as e:
@@ -235,6 +326,7 @@ try:
         try:
             write_order(oid, {'view': view, 'items': items})
             written += 1
+            (relookup if oid in faulted else confirmed).add(oid)
         except Fatal:
             raise
         except Exception as e:
@@ -250,12 +342,38 @@ except BaseException as e:
         sys.exit(1)
     raise
 
+
+#-- Cache Log Update ------------------------------------------------------
+
+if args.force:
+    try:
+        log, _ = read_log(cache_log)
+    except ValueError as e:
+        t.warning("Cache log unreadable, entries discarded", cache_log=cache_log, error=str(e))
+        log = {}
+
+stamp = brickowl.utc_iso(run_start)
+log = {**{oid: v for oid, v in log.items() if oid not in relookup},
+       **{oid: stamp for oid in confirmed | current}}
+
+log_error = None
+try:
+    write_log(cache_log, dict(sorted(log.items(), key=lambda e: int(e[0]))))
+except Exception as e:
+    log_error = getattr(e, 'strerror', None) or str(e)
+    t.warning("Could not write cache log", cache_log=cache_log, error=log_error)
+
 if flagged or faulted:
     t.end_failure("Some orders not downloaded or with faults", written=written, skipped=skipped,
+                  current=len(current),
                   flagged=len(flagged), order_ids=','.join(flagged),
-                  faulted=len(faulted), faulted_ids=','.join(faulted))
+                  faulted=len(faulted), faulted_ids=','.join(faulted),
+                  **({'log_error': log_error} if log_error else {}))
+elif log_error:
+    t.end_failure("Cache log not written", written=written, skipped=skipped, current=len(current),
+                  log_error=log_error)
 else:
-    t.end_success(written=written, skipped=skipped)
+    t.end_success(written=written, skipped=skipped, current=len(current))
 
 logberry.stop()
-sys.exit(1 if flagged or faulted else 0)
+sys.exit(1 if flagged or faulted or log_error else 0)

@@ -4,6 +4,7 @@ if __name__ != '__main__':
 from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
+from io import BytesIO
 from os import path
 from typing import Optional
 import argparse
@@ -11,10 +12,17 @@ import os
 import re
 import sys
 import tempfile
+from urllib.parse import quote
 
 from openpyxl import Workbook
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+from openpyxl.drawing.image import Image as SheetImage
+from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
+from openpyxl.drawing.xdr import XDRPositiveSize2D
 from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
+from openpyxl.utils.units import pixels_to_EMU
+from PIL import Image
 
 from apps.brickowl import common
 from stockist import brickowl
@@ -30,14 +38,25 @@ DATETIME = 'yyyy-mm-dd hh:mm'
 
 SUMMARY_TITLE = 'Summary'
 
+FONT = 'Liberation Sans'
+LINK_COLOR = '0563C1'
+# Size column widths below are designed for, in points.
+BASE_SIZE = 11
+
+BOID_URL = 'https://www.brickowl.com/boid/'
+
+# Cached image size shown, square, in pixels.
+THUMB = 25
+
 # Column label, width, and number format.
 SUMMARY_COLUMNS = (
+    ('', 4, None),  # Image
     ('BOID', 14, None),
+    ('Name', 40, None),
+    ('Quantity', 10, None),
     ('Natural ID', 14, None),
     ('Type', 12, None),
-    ('Name', 60, None),
     ('Color', 20, None),
-    ('Quantity', 10, None),
     ('Minimum Adjusted Price', 14, CURRENCY),
     ('Maximum Adjusted Price', 14, CURRENCY),
     ('Median Adjusted Price', 14, CURRENCY),
@@ -53,12 +72,12 @@ SUMMARY_COLUMNS = (
 
 DETAILS_COLUMNS = (
     ('BOID', 14, None),
+    ('Name', 60, None),
+    ('Quantity', 10, None),
     ('Natural ID', 14, None),
     ('Type', 12, None),
-    ('Name', 60, None),
     ('Color', 20, None),
     ('Condition', 18, None),
-    ('Quantity', 10, None),
     ('Adjusted Price', 14, CURRENCY),
     ('Adjusted Subtotal', 14, CURRENCY),
     ('Price', 14, CURRENCY),
@@ -80,6 +99,7 @@ parser = argparse.ArgumentParser(prog='python -m apps.brickowl.summarize-orders'
                                  description='Summarize cached Brick Owl orders into an XLSX workbook')
 common.add_config_arguments(parser)
 common.add_scope_arguments(parser)
+common.add_images_argument(parser)
 parser.add_argument('--out', help='Output XLSX filename (default from configuration file, else '
                                   'data/brickowl/orders.xlsx)')
 args = parser.parse_args()
@@ -89,14 +109,19 @@ def fail(msg):
     print(f"{PROG}: error: {msg}", file=sys.stderr)
     sys.exit(1)
 
+def warn(msg):
+    print(f"{PROG}: warning: {msg}", file=sys.stderr)
+
 try:
-    settings = common.load_settings(args, options=('out',))
+    settings = common.load_settings(args, options=('out', 'images'))
 except Exception as e:
     fail(f"Could not load configuration: {e}")
 
 out = args.out or path.join('data', 'brickowl', 'orders.xlsx')
 if path.isdir(out):
     fail(f"Output '{out}' is a folder")
+
+images = args.images or common.DEFAULT_IMAGES
 
 
 #-- Orders ----------------------------------------------------------------
@@ -126,6 +151,7 @@ class Order:
     time: float
     store_id: str
     store_name: str
+    store_url: str
     status: str
     total: Decimal
     lines: list[Line] = field(default_factory=list)
@@ -167,7 +193,7 @@ def _line(position, item):
                 boid=_text(item, 'boid'),
                 natural_id=_text(item, 'natural_id'),
                 type=_text(item, 'type'),
-                name=brickowl.display_name(_text(item, 'name')).strip(),
+                name=brickowl.display_item_name(_text(item, 'name')),
                 color=_text(item, 'color_name'),
                 condition=CONDITION_LABEL.get(code) or _text(item, 'condition'),
                 condition_rank=CONDITION_RANK.get(code),
@@ -214,6 +240,7 @@ def read_order(view, items):
                   time=time,
                   store_id=_text(view, 'store_id'),
                   store_name=brickowl.display_name(_text(view, 'store_name')).strip(),
+                  store_url=_text(view, 'store_url'),
                   status=_status(view),
                   total=_total(view),
                   lines=[_line(p, i) for p, i in enumerate(items)])
@@ -300,14 +327,14 @@ def summary_row(item):
     adjusted = weighted_stats([(l.adjusted_price, l.quantity) for l in item.lines])
     plain = weighted_stats([(l.price, l.quantity) for l in item.lines])
     contributors = sorted(item.orders.items(), key=lambda o: (-o[1], int(o[0])))
-    return [first.boid, first.natural_id, first.type, first.name, first.color, quantity,
+    return [first.boid, first.name, quantity, first.natural_id, first.type, first.color,
             *adjusted, sum(l.adjusted_subtotal for l in item.lines),
             *plain, sum(l.subtotal for l in item.lines),
             ', '.join(oid for oid, _ in contributors)]
 
 # Python's sort is stable, so ties beyond BOID remain in workbook order.
 summary = sorted((summary_row(i) for i in items.values()),
-                 key=lambda r: (-r[10], -r[5], _missing_last(r[3]), _missing_last(r[0])))
+                 key=lambda r: (-r[10], -r[2], _missing_last(r[1]), _missing_last(r[0])))
 
 
 #-- Sheet labels ----------------------------------------------------------
@@ -356,9 +383,23 @@ for o in orders:
 
 #-- Workbook --------------------------------------------------------------
 
-bold = Font(bold=True)
+class Style:
+    """A sheet's fonts and row height, the latter in points."""
+    def __init__(self, size, row_height):
+        self.size = size
+        self.row_height = row_height
+        self.plain = Font(name=FONT, size=size)
+        self.bold = Font(name=FONT, size=size, bold=True)
+        self.link = Font(name=FONT, size=size, color=LINK_COLOR, underline='single')
 
-def put(ws, row, column, value, fmt=None):
+    def width(self, w):
+        """Column width scaled from one designed for BASE_SIZE."""
+        return w * self.size / BASE_SIZE
+
+SUMMARY_STYLE = Style(18, 24)
+DETAILS_STYLE = Style(12, 16)
+
+def put(ws, row, column, value, fmt=None, font=None, link=None):
     if isinstance(value, Decimal):
         value = float(value)
     elif isinstance(value, str):
@@ -369,17 +410,61 @@ def put(ws, row, column, value, fmt=None):
         cell.data_type = 's'
     if fmt:
         cell.number_format = fmt
+    if font:
+        cell.font = font
+    if link:
+        cell.hyperlink = link
     return cell
 
-def header(ws, row, columns):
+def header(ws, row, columns, style):
     for c, (label, width, _) in enumerate(columns, start=1):
-        put(ws, row, c, label).font = bold
-        ws.column_dimensions[ws.cell(row=row, column=c).column_letter].width = width
+        if label:
+            put(ws, row, c, label, font=style.bold)
+        ws.column_dimensions[get_column_letter(c)].width = style.width(width)
+    ws.row_dimensions[row].height = style.row_height
 
-def rows(ws, start, data, columns):
-    for r, values in enumerate(data, start=start):
+def rows(ws, start, data, columns, style, links):
+    """Write rows of data, each one's Name linked to the URL in links, if any."""
+    name = [label for label, _, _ in columns].index('Name') + 1
+    for r, (values, link) in enumerate(zip(data, links), start=start):
         for c, (value, (_, _, fmt)) in enumerate(zip(values, columns), start=1):
-            put(ws, r, c, value, fmt)
+            if c == name and link:
+                put(ws, r, c, value, fmt, style.link, link)
+            else:
+                put(ws, r, c, value, fmt, style.plain)
+        ws.row_dimensions[r].height = style.row_height
+
+def frozen(columns, header_rows):
+    """Cell freezing the header rows and columns up to and including Quantity."""
+    quantity = [label for label, _, _ in columns].index('Quantity') + 1
+    return f"{get_column_letter(quantity + 1)}{header_rows + 1}"
+
+def boid_url(boid):
+    """Brick Owl catalog entry of a BOID, per apps.brickowl.md §1.10."""
+    return BOID_URL + quote(boid, safe='') if boid else None
+
+def load_image(boid):
+    """Cached image of a BOID; error if unavailable or unreadable."""
+    if not common.BOID_FILENAME.fullmatch(boid):
+        raise ValueError("BOID not usable as a filename")
+    with open(common.image_path(images, boid, THUMB), 'rb') as f:
+        data = f.read()
+    try:
+        with Image.open(BytesIO(data)) as im:
+            im.load()
+    except Exception:
+        raise ValueError("cached image file cannot be read")
+    return SheetImage(BytesIO(data))
+
+def place(ws, img, row, column, style, width):
+    """Pin an image to a cell, centered within it."""
+    # Column pixels per the default font's 7 pixel character width.
+    x = max(0, (int(style.width(width) * 7 + 5) - THUMB) // 2)
+    y = max(0, (round(style.row_height * 96 / 72) - THUMB) // 2)
+    img.anchor = OneCellAnchor(_from=AnchorMarker(col=column - 1, colOff=pixels_to_EMU(x),
+                                                  row=row - 1, rowOff=pixels_to_EMU(y)),
+                               ext=XDRPositiveSize2D(pixels_to_EMU(THUMB), pixels_to_EMU(THUMB)))
+    ws.add_image(img)
 
 def _id(s):
     return int(s) if s.isdigit() else s
@@ -388,31 +473,49 @@ wb = Workbook()
 
 ws = wb.active
 ws.title = SUMMARY_TITLE
-header(ws, 1, SUMMARY_COLUMNS)
-rows(ws, 2, summary, SUMMARY_COLUMNS)
-ws.freeze_panes = 'A2'
+header(ws, 1, SUMMARY_COLUMNS, SUMMARY_STYLE)
+rows(ws, 2, [[None, *r] for r in summary], SUMMARY_COLUMNS, SUMMARY_STYLE,
+     [boid_url(r[0]) for r in summary])
+ws.freeze_panes = frozen(SUMMARY_COLUMNS, 1)
+
+# Summary items with a BOID but no usable cached image.
+imageless = 0
+if not path.isdir(images):
+    warn(f"Image cache '{images}' does not exist or is not a folder, no images included")
+else:
+    for r, row in enumerate(summary, start=2):
+        if not row[0]:
+            continue
+        try:
+            img = load_image(row[0])
+        except Exception as e:
+            warn(f"No image for BOID {row[0]}: {getattr(e, 'strerror', None) or e}")
+            imageless += 1
+            continue
+        place(ws, img, r, 1, SUMMARY_STYLE, SUMMARY_COLUMNS[0][1])
 
 for o in orders:
     ws = wb.create_sheet(sheet_labels[o.id])
     boids = {l.boid or l.position for l in o.lines if l.quantity > 0}
-    overview = (('Store Name', o.store_name, None),
-                ('Store ID', _id(o.store_id), None),
-                ('Order ID', int(o.id), None),
-                ('Order Date', brickowl.local_time(o.time).replace(tzinfo=None), DATETIME),
-                ('Order Status', o.status, None),
-                ('BOIDs', len(boids), None),
-                ('Quantity', sum(l.quantity for l in o.lines), None),
-                ('Total', o.total, CURRENCY))
-    for c, (label, value, fmt) in enumerate(overview):
-        put(ws, 1, 2 * c + 1, label).font = bold
-        put(ws, 1, 2 * c + 2, value, fmt)
+    overview = (('Store Name', o.store_name, None, o.store_url),
+                ('Store ID', _id(o.store_id), None, None),
+                ('Order ID', int(o.id), None, None),
+                ('Order Date', brickowl.local_time(o.time).replace(tzinfo=None), DATETIME, None),
+                ('Order Status', o.status, None, None),
+                ('BOIDs', len(boids), None, None),
+                ('Quantity', sum(l.quantity for l in o.lines), None, None),
+                ('Total', o.total, CURRENCY, None))
+    for c, (label, value, fmt, link) in enumerate(overview):
+        put(ws, 1, 2 * c + 1, label, font=DETAILS_STYLE.bold)
+        put(ws, 1, 2 * c + 2, value, fmt, DETAILS_STYLE.link if link else DETAILS_STYLE.plain, link)
+    ws.row_dimensions[1].height = DETAILS_STYLE.row_height
 
-    header(ws, 2, DETAILS_COLUMNS)
-    rows(ws, 3, [[l.boid, l.natural_id, l.type, l.name, l.color, l.condition, l.quantity,
+    header(ws, 2, DETAILS_COLUMNS, DETAILS_STYLE)
+    rows(ws, 3, [[l.boid, l.name, l.quantity, l.natural_id, l.type, l.color, l.condition,
                   l.adjusted_price, l.adjusted_subtotal, l.price, l.subtotal]
                  for l in o.lines],
-         DETAILS_COLUMNS)
-    ws.freeze_panes = 'A3'
+         DETAILS_COLUMNS, DETAILS_STYLE, [boid_url(l.boid) for l in o.lines])
+    ws.freeze_panes = frozen(DETAILS_COLUMNS, 2)
 
 
 #-- Output ----------------------------------------------------------------
@@ -447,4 +550,5 @@ except Exception as e:
             break
     fail(f"Could not write '{out}': {getattr(e, 'strerror', None) or e}")
 
-print(f"Wrote {len(orders)} orders, {len(summary)} items to {out}")
+print(f"Wrote {len(orders)} orders, {len(summary)} items to {out}"
+      + (f" ({imageless} items without images)" if imageless else ''))

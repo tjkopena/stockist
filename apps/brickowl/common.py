@@ -13,6 +13,10 @@ import tjawn
 RANGE_SEP = '::'
 CACHE_FILE = re.compile(r'order-([1-9][0-9]*)\.jawn')
 
+DEFAULT_IMAGES = path.join('data', 'brickowl', 'images')
+# BOIDs are used as image cache filenames, so must be plain names.
+BOID_FILENAME = re.compile(r'[0-9A-Za-z][0-9A-Za-z_-]*')
+
 
 #-- Configuration ---------------------------------------------------------
 
@@ -21,6 +25,14 @@ def add_config_arguments(parser):
     parser.add_argument('--key', help='Brick Owl API key (default from configuration file)')
     parser.add_argument('--cache',
                         help=f'Order cache folder (default from configuration file, else {brickowl.DEFAULT_CACHE})')
+
+def add_images_argument(parser):
+    parser.add_argument('--images',
+                        help=f'Image cache folder (default from configuration file, else {DEFAULT_IMAGES})')
+
+def image_path(images, boid, size):
+    """Cached image file for a BOID at the given size in pixels."""
+    return path.join(images, f"{boid}.{size}px.png")
 
 def load_settings(args, options=()):
     """Settings from the configuration file, overridden by the command line.

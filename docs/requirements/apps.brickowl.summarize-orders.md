@@ -75,10 +75,6 @@ price is the subtotal for a given item (order line item or BOID
 aggregate) divided by the quantity of that item, excluding refunds.  The
 median of an even quantity is the mean of the two middle values.
 
-A missing or blank BOID is presented as a blank in output, but
-considered distinct from any other for aggregation and other purposes,
-including other blank BOIDs.
-
 
 ## 2. Configuration & Parameters                          ^configuration
 
@@ -94,10 +90,15 @@ This app operates over cached orders within the configured order scope.
 If no orders are in scope the run fails with an error.
 
 An Excel XLSX spreadsheet workbook is written to the output filename.
-Any existing file is overwritten and missing parent directories created.
+Use within LibreOffice is the nominal target of the spreadsheet.  Any
+existing file is overwritten and missing parent directories created.
 Existing files are not overwritten and no directories created if the run
 aborts with an error.  The final workbook is written atomically, i.e.,
 as a temp file that is then renamed.
+
+A missing or blank BOID is presented as a blank in output, but
+considered distinct from any other for aggregation and other purposes,
+including other blank BOIDs.
 
 All monetary values are written in United States dollars (USD) with data
 in full precision but the cell presented in default USD format.
@@ -106,6 +107,9 @@ All monetary and quantity totals exclude refunded items.  Fully refunded
 items are not included in Summary Sheet calculations or aggregations but
 are listed in the Details Sheets.
 
+Hyperlinks to items' entries in Brick Owl's catalog follow
+§apps.brickowl.md:item-links:1.10.  Items with no BOID are not linked.
+
 ### 3.1 Summary Sheet                                     ^summary-sheet
 
 The first sheet of the output presents an aggregate summary:
@@ -113,14 +117,14 @@ The first sheet of the output presents an aggregate summary:
 * Each subsequent row presents data for one item as identified by BOID,
   computed across all orders processed in this run and all conditions
   for the item, sorted by decreasing adjusted subtotal, decreasing
-  quantity, name, then
-  BOID natural comparison:
+  quantity, name, then BOID natural comparison:
+  * Image (no header label on this column)
   * BOID
+  * Name (hyperlink to this item's Brick Owl entry)
+  * Quantity
   * Natural ID
   * Type
-  * Name
   * Color
-  * Quantity
   * Minimum Adjusted Price
   * Maximum Adjusted Price
   * Median Adjusted Price
@@ -133,6 +137,17 @@ The first sheet of the output presents an aggregate summary:
   * Subtotal (sum of prices paid for this BOID)
   * Orders (comma separated list of unique contributing order IDs sorted
     by quantity contributed and then order ID)
+
+The Image column for each row is the 25x25 PNG for that BOID from the
+image cache (§apps.brickowl.md:image-cache:2.6).  The image is pinned to
+the cell, centered horizontally and vertically within, in a best effort
+attempt to have it follow the row upon sorting or filtering (this
+behavior is greatly contingent on the application).
+
+The Summary sheet uses Liberation Sans 18pt font.  Column widths and row
+heights are roughly scaled and set appropriately.  Header row is bold.
+
+The header row and columns up to and including Quantity are frozen.
 
 ### 3.2 Details Sheets                                   ^details-sheets
 
@@ -150,7 +165,7 @@ sorted by the UTC instant placed (most recent first) then order ID:
   decreases until the earliest order (thus latest in the workbook) is
   assigned an X of 1.
 * The first row of each of these sheets reports a labeled summary:
-  * Store Name
+  * Store Name (hyperlink to `store_url` if present & not blank)
   * Store ID
   * Order ID
   * Order Date
@@ -163,12 +178,12 @@ sorted by the UTC instant placed (most recent first) then order ID:
   order by decreasing adjusted subtotal, decreasing quantity,
   BOID natural comparison, condition, then line item position:
   * BOID
+  * Name (hyperlink to this item's Brick Owl entry)
+  * Quantity
   * Natural ID
   * Type
-  * Name
   * Color
   * Condition
-  * Quantity
   * Adjusted Price
   * Adjusted Subtotal (sum of adjusted prices paid for this line item)
   * Price
@@ -177,6 +192,14 @@ sorted by the UTC instant placed (most recent first) then order ID:
 Note that the order details sheet captures each line item in an order,
 and BOID+condition pairs might repeat.  The overall summary sheet though
 aggregates identical BOIDs regardless of condition.
+
+The Details sheets specifically do not include item images as a file
+size reduction workaround (openpyxl does not support any deduplication).
+
+The Details sheets use Liberation Sans 12pt font.  Column widths and row
+heights are roughly scaled and set appropriately.  Header row is bold.
+
+The two header rows and columns up to and including Quantity are frozen.
 
 
 ## 4. Incorrect, Missing, and Inaccessible Data                  ^errors
@@ -189,3 +212,9 @@ monetary calculations results in an error and aborted run, including:
 * Missing data necessary to compute a total, or an undefined total;
 * The `refunded_quantity` is greater than the `ordered_quantity`;
 * Negative prices or quantities.
+
+If the image cache does not exist or exists but is not a directory, the
+issue is flagged but the Summary sheet's Image column is simply left
+blank and the run does not end with an error code.  If any specific item
+does not have a readable 25x25 cached image file it is flagged but its
+Summary image is simply left blank and no error code results.

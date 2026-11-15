@@ -5,6 +5,7 @@ dataclasses-json
 google-auth-oauthlib
 gspread
 openpyxl
+Pillow
 PyPDF2
 requests
 tjawn>=2.0

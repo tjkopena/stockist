@@ -109,12 +109,14 @@ class Client:
         t.end_success()
         return res.json()
 
-    def list_orders(self, order_time=None):
-        t = logberry.task("Retrieving order list", order_time=order_time)
+    def list_orders(self, order_time=None, update_time=None):
+        t = logberry.task("Retrieving order list", order_time=order_time, update_time=update_time)
 
         params = {'list_type': 'customer', 'limit': 5000}
         if order_time is not None:
             params['order_time'] = order_time
+        if update_time is not None:
+            params['update_time'] = update_time
 
         orders = []
         while True:
@@ -246,6 +248,20 @@ def parse_timestamp(v, field):
         raise ValueError(f"Malformed {field} '{v}'")
     return int(v)
 
+def utc_iso(ts):
+    """ISO 8601 UTC text of a Unix timestamp, as stockist stores times."""
+    return datetime.fromtimestamp(ts, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+def parse_utc_iso(s):
+    """Unix timestamp of ISO 8601 UTC text with a Z suffix; ValueError if
+    malformed."""
+    if not isinstance(s, str) or not s.endswith('Z'):
+        raise ValueError(f"Malformed UTC time '{s}'")
+    try:
+        return datetime.fromisoformat(s[:-1] + '+00:00').timestamp()
+    except (OverflowError, OSError, ValueError):
+        raise ValueError(f"Malformed UTC time '{s}'")
+
 def _iso_order_time(view):
     """Order's iso_order_time as an aware datetime in Brick Owl's own
     timezone, None if missing; ValueError if malformed."""
@@ -325,6 +341,11 @@ def display_name(name):
     characters stripped, per apps.brickowl.md §1.4."""
     return ''.join(c for c in html.unescape(name)
                    if unicodedata.category(c) not in ('Cc', 'Cf'))
+
+def display_item_name(name):
+    """Item name as display_name, whitespace trimmed and any "LEGO "
+    prefix stripped, per apps.brickowl.md §1.4."""
+    return display_name(name).strip().removeprefix('LEGO ').strip()
 
 
 # Item conditions, greatest first, per apps.brickowl.md §1.9.

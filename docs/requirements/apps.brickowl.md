@@ -78,6 +78,8 @@ For display and sorting purposes, store and item names have HTML
 entities unescaped and then control characters stripped (both Unicode Cc
 and Cf).
 
+Item names for display purposes also have any "LEGO " prefix stripped.
+
 ### 1.5 Natural Order                                     ^natural-order
 
 A "natural order" or "natural sort" over string values is a
@@ -177,6 +179,11 @@ conditions from greatest to least is:
 |Used (Complete)   |usedc |
 |Used (Incomplete) |usedi |
 |Used (Acceptable) |useda |
+
+### 1.10 Item Links                                          ^item-links
+
+Items may be linked to the Brick Owl catalog by URLs of the form
+`https://www.brickowl.com/boid/<BOID>`, with color suffix supported.
 
 
 ## 2. Common Configuration & Parameters                   ^configuration
@@ -314,3 +321,14 @@ scope aborts the run with an error, including:
   from the order ID in the filename.
 * An unrecognized status ID or string if any explicit `--status`
   directive is to be applied.
+
+### 2.6 Image Cache                                         ^image-cache
+
+`stockist` Brick Owl apps may use a local cache of item images.  The
+image cache folder may be specified in the configuration file or on the
+command line (`--images`).  The default is `data/brickowl/images/`.
+
+Item images are cached as PNGs keyed to the BOID, in two sizes:
+* `<BOID>.75px.png`: 75x75 pixel image downloaded from Brick Owl,
+  resized and converted to PNG if necessary.
+* `<BOID>.25px.png`: 25x25 pixel image downsampled from the 75x75.
